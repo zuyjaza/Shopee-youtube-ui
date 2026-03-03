@@ -87,28 +87,26 @@ def main():
         header[data-testid="stHeader"] {
             display: none !important;
         }
-        }
-        /* Phông chữ và tiêu đề - SIÊU KHỔNG LỒ & BẮT BUỘC */
+        /* Phông chữ và tiêu đề - 1 HÀNG, TỰ CO GIÃN */
         .header-title {
             color: #212121 !important;
             text-align: center !important;
             font-weight: 900 !important;
-            font-size: 8vw !important; /* To theo chiều ngang màn hình */
-            margin-top: 10px !important;
-            margin-bottom: 30px !important;
+            font-size: 80px !important; /* To trên PC */
+            margin-top: 5px !important;
+            margin-bottom: 20px !important;
             display: flex !important;
             flex-direction: row !important;
             align-items: center !important;
             justify-content: center !important;
             gap: 15px !important;
-            line-height: 1.1 !important;
             width: 100% !important;
             white-space: nowrap !important;
         }
         @media (max-width: 768px) {
             .header-title {
-                font-size: 10vw !important; /* To hơn nữa trên điện thoại */
-                gap: 10px !important;
+                font-size: 8vw !important; /* Tự co nhỏ để vừa màn hình điện thoại */
+                gap: 8px !important;
             }
         }
         .header-title span {
@@ -145,7 +143,7 @@ def main():
 
     # --- Main Content ---
     yt_icon = """
-    <svg viewBox="0 0 2859 2000" style="width: 70px; height: 70px; flex-shrink: 0;">
+    <svg viewBox="0 0 2859 2000" style="width: 45px; height: 45px; flex-shrink: 0;">
         <path fill="#FF0000" d="M2790.8 311.2c-32.3-121.1-127.1-216-248.2-248.2C2323.9 0 1429.5 0 1429.5 0S535 0 316.4 63C195.3 95.2 100.5 190.1 68.2 311.2 0 529.8 0 985 0 985s0 455.2 68.2 673.8c32.3 121.1 127.1 216 248.2 248.2 218.6 63 1113.1 63 1113.1 63s894.4 0 1113.1-63c121.1-32.3 216-127.1 248.2-248.2 68.2-218.6 68.2-673.8 68.2-673.8s0-455.2-68.2-673.8"/>
         <path fill="#FFF" d="M1142.4 1416.3l742.8-431.3-742.8-431.3z"/>
     </svg>
