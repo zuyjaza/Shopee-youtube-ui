@@ -148,18 +148,15 @@ def main():
     st.markdown(f"<div class='header-title'>{yt_icon} Mã YouTube Shopee</div>", unsafe_allow_html=True)
 
     st.markdown(f"""
-    <a href="{zalo_link}" target="_blank" style="text-decoration: none; display: block; margin-bottom: 20px;">
+    <a href="{zalo_link}" target="_blank" style="text-decoration: none;">
         <div style="
-            background: linear-gradient(90deg, #0068ff, #00aaff);
-            color: white; padding: 10px 16px;
-            border-radius: 10px; display: flex; align-items: center; gap: 10px;
-            box-shadow: 0 2px 6px rgba(0,104,255,0.3);
+            background-color: #0068ff;
+            color: white; padding: 12px;
+            border-radius: 8px; text-align: center;
+            font-weight: 700; margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         ">
-            <span style="font-size: 22px;">💬</span>
-            <div>
-                <div style="font-weight: 700; font-size: 14px;">Tham gia nhóm Zalo</div>
-                <div style="font-size: 12px; opacity: 0.9;">Nhóm hỗ trợ cập nhật mã hàng ngày.</div>
-            </div>
+            💬 THAM GIA NHÓM ZALO HỖ TRỢ
         </div>
     </a>
     """, unsafe_allow_html=True)
