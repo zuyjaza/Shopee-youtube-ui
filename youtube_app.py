@@ -30,8 +30,8 @@ def main():
     if "config_loaded" not in st.session_state:
         config = load_config()
         st.session_state["zalo_link"] = config.get("zalo_link", "https://zalo.me/g/svkgoi169")
-        st.session_state["fixed_link"] = config.get("fixed_link", "https://www.youtube.com/@antigrav")
-        st.session_state["api_url"] = config.get("api_url", "http://127.0.0.1:8002")
+        st.session_state["fixed_link"] = config.get("fixed_link", "https://youtube.com/shopcollection/SCUCRmBaJUNvFvMmbln7TBzmH7gk5YXlO3wJA?si=CF2lyK08AMJms7uy")
+        st.session_state["api_url"] = config.get("api_url", "https://shopeeyt.onrender.com")
         st.session_state["config_loaded"] = True
 
     # Global API_URL
@@ -256,3 +256,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
