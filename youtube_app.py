@@ -142,6 +142,9 @@ def main():
         <path fill="#FFF" d="M1142.4 1416.3l742.8-431.3-742.8-431.3z"/>
     </svg>
     """
+    # Mở container chính
+    st.markdown("<div class='main-container'>", unsafe_allow_html=True)
+
     st.markdown(f"<div class='header-title'>{yt_icon} Mã YouTube Shopee</div>", unsafe_allow_html=True)
 
     st.markdown(f"""
@@ -216,7 +219,19 @@ def main():
                                 
                                 col1, col2 = st.columns(2)
                                 with col1:
-                                    st.markdown(f'<a href="{result_link}" target="_blank" style="text-decoration: none;"><button style="width: 100%; padding: 10px; background-color: white; color: #333; border: 1px solid #ccc; border-radius: 6px; cursor: pointer; font-weight: 600;">🌍 MỞ LINK ĐỂ LẤY MÃ</button></a>', unsafe_allow_html=True)
+                                    # Sử dụng link trực tiếp được style như button thay vì cho button vào trong thẻ a
+                                    st.markdown(f"""
+                                    <a href="{result_link}" target="_blank" style="text-decoration: none;">
+                                        <div style="
+                                            width: 100%; padding: 10px; background-color: white; 
+                                            color: #333; border: 1px solid #ccc; border-radius: 6px; 
+                                            text-align: center; font-weight: 600; font-size: 14px;
+                                            box-sizing: border-box;
+                                        ">
+                                            🌍 MỞ LINK ĐỂ LẤY MÃ
+                                        </div>
+                                    </a>
+                                    """, unsafe_allow_html=True)
                                 with col2:
                                     components.html(f"<button onclick=\"navigator.clipboard.writeText('{result_link}').then(() => {{ this.innerHTML = '✅ ĐĂNG COPY'; this.style.backgroundColor = '#ff0000'; this.style.color = 'white'; setTimeout(() => {{ this.innerHTML = '📋 COPY LINK'; this.style.backgroundColor = 'white'; this.style.color = '#333'; }}, 2000); }})\" style=\"width: 100%; padding: 10px; background-color: white; color: #333; border: 2px solid #ff0000; border-radius: 6px; cursor: pointer; font-weight: 600; font-family: sans-serif;\">📋 COPY LINK</button>", height=55)
                                 found_result = True
