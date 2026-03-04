@@ -1,5 +1,6 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 import uuid
 import time
@@ -241,6 +242,272 @@ async def reset_all():
     job_queue.clear()
     job_results.clear()
     return {"message": "Đã reset sạch sẽ hệ thống."}
+
+# --- Trang Giao diện Siêu nhẹ (Zalo Compatible) ---
+@app.get("/", response_class=HTMLResponse)
+async def get_ui():
+    html_content = """
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mã YouTube Shopee</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f0f2f5;
+            color: #31333f;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .container {
+            max-width: 600px;
+            width: 100%;
+        }
+        .header-title {
+            color: #212121;
+            text-align: center;
+            font-weight: 900;
+            font-size: 3rem;
+            margin: 20px 0;
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+            width: 100%;
+            white-space: nowrap;
+        }
+        @media (max-width: 480px) {
+            .header-title { font-size: 1.8rem; gap: 8px; }
+            .yt-icon { width: 35px !important; height: 35px !important; }
+        }
+        .btn-zalo {
+            background-color: #0068ff;
+            color: white;
+            padding: 12px;
+            border-radius: 8px;
+            text-align: center;
+            font-weight: 700;
+            margin-bottom: 12px;
+            text-decoration: none;
+            display: block;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .btn-yt {
+            background-color: #ff0000;
+            color: white;
+            padding: 12px;
+            border-radius: 8px;
+            text-align: center;
+            font-weight: 700;
+            margin-bottom: 20px;
+            text-decoration: none;
+            display: block;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .input-group {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            font-size: 0.9rem;
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+        input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ff0000;
+            border-radius: 6px;
+            box-sizing: border-box;
+            font-size: 1rem;
+            margin-bottom: 15px;
+            background-color: #f8f9fa;
+        }
+        button#convert-btn {
+            background-color: #ff0000;
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 6px;
+            font-weight: 700;
+            cursor: pointer;
+            font-size: 1rem;
+            width: 100%;
+            transition: background 0.2s;
+        }
+        button#convert-btn:disabled {
+            background-color: #ccc;
+        }
+        .status-box {
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+            display: none;
+        }
+        .status-pending { background-color: #fff3cd; color: #856404; border: 1px solid #ffeeba; }
+        .status-success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .status-error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .result-area {
+            margin-top: 15px;
+            display: none;
+        }
+        .result-link {
+            word-break: break-all;
+            background: #eee;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            margin-bottom: 10px;
+        }
+        .action-btns {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+        .btn-action {
+            padding: 10px;
+            border-radius: 6px;
+            text-align: center;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+        .btn-copy { background: #28a745; color: white; border: none; cursor: pointer; }
+        .btn-open { background: #ff0000; color: white; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header-title">
+            <svg class="yt-icon" viewBox="0 0 2859 2000" style="width: 45px; height: 45px; flex-shrink: 0;">
+                <path fill="#FF0000" d="M2790.8 311.2c-32.3-121.1-127.1-216-248.2-248.2C2323.9 0 1429.5 0 1429.5 0S535 0 316.4 63C195.3 95.2 100.5 190.1 68.2 311.2 0 529.8 0 985 0 985s0 455.2 68.2 673.8c32.3 121.1 127.1 216 248.2 248.2 218.6 63 1113.1 63 1113.1 63s894.4 0 1113.1-63c121.1-32.3 216-127.1 248.2-248.2 68.2-218.6 68.2-673.8 68.2-673.8s0-455.2-68.2-673.8"/>
+                <path fill="#FFF" d="M1142.4 1416.3l742.8-431.3-742.8-431.3z"/>
+            </svg>
+            <span>Mã YouTube Shopee</span>
+        </div>
+
+        <a href="https://zalo.me/g/svkgoi169" target="_blank" class="btn-zalo">💬 THAM GIA NHÓM ZALO</a>
+        <a href="https://www.youtube.com/@antigrav" target="_blank" class="btn-yt">🎬 XEM MÃ CỐ ĐỊNH TẠI ĐÂY</a>
+
+        <div class="input-group">
+            <label>Dán link Shopee vào đây:</label>
+            <input type="text" id="shopee-url" placeholder="https://shopee.vn/...">
+            <button id="convert-btn" onclick="startConversion()">⚡ CHUYỂN ĐỔI LINK</button>
+        </div>
+
+        <div id="status-box" class="status-box"></div>
+
+        <div id="result-area" class="result-area">
+            <div id="result-link" class="result-link"></div>
+            <div class="action-btns">
+                <button class="btn-action btn-copy" onclick="copyLink()">📋 CHÉP MÃ</button>
+                <a id="open-link" href="#" target="_blank" class="btn-action btn-open">🌍 MỞ VIDEO</a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentJobId = null;
+        let pollInterval = null;
+
+        async function startConversion() {
+            const urlInput = document.getElementById('shopee-url');
+            const url = urlInput.value.trim();
+            if (!url) return alert('Vui lòng nhập link Shopee!');
+
+            const btn = document.getElementById('convert-btn');
+            btn.disabled = true;
+            btn.innerText = '⌛ ĐANG GỬI...';
+
+            showStatus('⌛ Đã gửi yêu cầu, đang chờ xử lý...', 'pending');
+            document.getElementById('result-area').style.display = 'none';
+
+            try {
+                const response = await fetch('/request-conversion', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url: url })
+                });
+                const data = await response.json();
+                currentJobId = data.job_id;
+                
+                // Bắt đầu polling
+                if (pollInterval) clearInterval(pollInterval);
+                pollInterval = setInterval(checkStatus, 2000);
+            } catch (err) {
+                showStatus('❌ Lỗi kết nối Server!', 'error');
+                btn.disabled = false;
+                btn.innerText = '⚡ CHUYỂN ĐỔI LINK';
+            }
+        }
+
+        async function checkStatus() {
+            if (!currentJobId) return;
+
+            try {
+                const response = await fetch(`/check-status?job_id=${currentJobId}`);
+                const data = await response.json();
+
+                if (data.status === 'complete') {
+                    clearInterval(pollInterval);
+                    showStatus('✅ CHUYỂN ĐỔI THÀNH CÔNG!', 'success');
+                    showResult(data.youtube_link);
+                    resetButton();
+                } else if (data.status === 'error') {
+                    clearInterval(pollInterval);
+                    showStatus('❌ LỖI: ' + data.error, 'error');
+                    resetButton();
+                } else {
+                    let msg = '⏳ ' + (data.detailed_status || 'Đang chờ xử lý...');
+                    if (data.queue_position > 0) msg += ` (Hàng đợi: ${data.queue_position})`;
+                    showStatus(msg, 'pending');
+                }
+            } catch (err) {
+                console.error('Polling error:', err);
+            }
+        }
+
+        function showStatus(msg, type) {
+            const box = document.getElementById('status-box');
+            box.style.display = 'block';
+            box.innerText = msg;
+            box.className = 'status-box status-' + type;
+        }
+
+        function showResult(link) {
+            const area = document.getElementById('result-area');
+            area.style.display = 'block';
+            document.getElementById('result-link').innerText = link;
+            document.getElementById('open-link').href = link;
+        }
+
+        function resetButton() {
+            const btn = document.getElementById('convert-btn');
+            btn.disabled = false;
+            btn.innerText = '⚡ CHUYỂN ĐỔI LINK';
+        }
+
+        function copyLink() {
+            const link = document.getElementById('result-link').innerText;
+            navigator.clipboard.writeText(link).then(() => {
+                alert('Đã chép mã thành công!');
+            });
+        }
+    </script>
+</body>
+</html>
+    """
+    return html_content
 
 if __name__ == "__main__":
     import uvicorn
