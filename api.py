@@ -510,7 +510,7 @@ async def get_ui():
                     resetButton();
                 }} else {{
                     // Chỉ hiển thị hàng đợi, ẩn chi tiết
-                    let msg = '⏳ Đang chờ xử lý...';
+                    let msg = '⏳ Đang chờ xử lý... từ 10-30s.';
                     if (data.queue_position > 0) msg = `⏳ Bạn đang ở vị trí thứ ${{data.queue_position}} trong hàng đợi.`;
                     showStatus(msg, 'pending');
                 }}
