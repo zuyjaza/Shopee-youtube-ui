@@ -20,7 +20,11 @@ app.add_middleware(
 job_queue: deque = deque()          # Hàng đợi chờ xử lý: [{"job_id", "url", "sub_id"}]
 job_results: dict = {}              # Kết quả: {job_id: {"status", "youtube_link", "error"}}
 emulator_commands: deque = deque()  # Hàng đợi lệnh cho Emulator: ["RELOAD", ...]
-JOB_TTL = 300                       # Giữ kết quả tối đa 5 phút
+
+# --- THAY ĐỔI LINK CỦA BẠN TẠI ĐÂY ---
+ZALO_LINK = "https://zalo.me/g/svkgoi169"
+YOUTUBE_LINK = "https://www.youtube.com/@antigrav"
+
 # --- Thống kê ---
 global_stats = {
     "total_requests": 0,
@@ -72,21 +76,25 @@ async def get_pending_link():
         if job_results.get(old["job_id"], {}).get("status") in ("pending", "processing"):
             job_results[old["job_id"]] = {"status": "error", "youtube_link": None, "error": "Hết thời gian chờ"}
 
-    # Tìm job đầu tiên có status "pending" trong queue
-    # (bỏ qua job đang "processing" để tránh bị block)
+    # --- KIỂM TRA XỬ LÝ TUẦN TỰ ---
+    # Nếu đã có job đang ở trạng thái "processing", không cấp job mới
+    # Điều này đảm bảo Bot chỉ làm xong việc này mới sang việc kia.
     for job in job_queue:
-        job_id = job["job_id"]
-        status = job_results.get(job_id, {}).get("status")
-
-        # Reset job bị stuck quá 90s ở processing → cho thử lại
-        if status == "processing":
+        if job_results.get(job["job_id"], {}).get("status") == "processing":
+            # Kiểm tra xem job này có bị stuck không (quá 90s)
             elapsed = now - job.get("picked_at", now)
             if elapsed > 90:
-                job_results[job_id]["status"] = "pending"
+                print(f"⚠️ Job {job['job_id']} bị stuck, reset về pending.")
+                job_results[job["job_id"]]["status"] = "pending"
                 job.pop("picked_at", None)
-                status = "pending"
+            else:
+                # Vẫn đang có job xử lý và chưa quá hạn -> không cấp thêm
+                return {"has_link": False}
 
-        if status == "pending":
+    # Tìm job đầu tiên "pending" để cấp cho bot
+    for job in job_queue:
+        job_id = job["job_id"]
+        if job_results.get(job_id, {}).get("status") == "pending":
             job_results[job_id]["status"] = "processing"
             job["picked_at"] = now
             return {
@@ -243,10 +251,11 @@ async def reset_all():
     job_results.clear()
     return {"message": "Đã reset sạch sẽ hệ thống."}
 
+
 # --- Trang Giao diện Siêu nhẹ (Zalo Compatible) ---
 @app.get("/", response_class=HTMLResponse)
 async def get_ui():
-    html_content = """
+    html_content = f"""
 <!DOCTYPE html>
 <html lang="vi">
 <head>
@@ -254,7 +263,7 @@ async def get_ui():
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Mã YouTube Shopee</title>
     <style>
-        body {
+        body {{
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             background-color: #f0f2f5;
             color: #31333f;
@@ -263,12 +272,12 @@ async def get_ui():
             display: flex;
             flex-direction: column;
             align-items: center;
-        }
-        .container {
+        }}
+        .container {{
             max-width: 600px;
             width: 100%;
-        }
-        .header-title {
+        }}
+        .header-title {{
             color: #212121;
             text-align: center;
             font-weight: 900;
@@ -281,12 +290,11 @@ async def get_ui():
             gap: 15px;
             width: 100%;
             white-space: nowrap;
-        }
-        @media (max-width: 480px) {
-            .header-title { font-size: 1.8rem; gap: 8px; }
-            .yt-icon { width: 35px !important; height: 35px !important; }
-        }
-        .btn-zalo {
+        }}
+        @media (max-width: 480px) {{
+            .header-title {{ font-size: 1.8rem; gap: 8px; }}
+        }}
+        .btn-zalo {{
             background-color: #0068ff;
             color: white;
             padding: 12px;
@@ -297,8 +305,8 @@ async def get_ui():
             text-decoration: none;
             display: block;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        .btn-yt {
+        }}
+        .btn-yt {{
             background-color: #ff0000;
             color: white;
             padding: 12px;
@@ -309,21 +317,21 @@ async def get_ui():
             text-decoration: none;
             display: block;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        .input-group {
+        }}
+        .input-group {{
             background: white;
             padding: 20px;
             border-radius: 10px;
             box-shadow: 0 1px 3px rgba(0,0,0,0.1);
             margin-bottom: 20px;
-        }
-        label {
+        }}
+        label {{
             display: block;
             font-size: 0.9rem;
             margin-bottom: 8px;
             font-weight: 500;
-        }
-        input {
+        }}
+        input {{
             width: 100%;
             padding: 12px;
             border: 2px solid #ff0000;
@@ -332,8 +340,8 @@ async def get_ui():
             font-size: 1rem;
             margin-bottom: 15px;
             background-color: #f8f9fa;
-        }
-        button#convert-btn {
+        }}
+        button#convert-btn {{
             background-color: #ff0000;
             color: white;
             border: none;
@@ -344,46 +352,46 @@ async def get_ui():
             font-size: 1rem;
             width: 100%;
             transition: background 0.2s;
-        }
-        button#convert-btn:disabled {
+        }}
+        button#convert-btn:disabled {{
             background-color: #ccc;
-        }
-        .status-box {
+        }}
+        .status-box {{
             padding: 15px;
             border-radius: 8px;
             margin-top: 20px;
             display: none;
-        }
-        .status-pending { background-color: #fff3cd; color: #856404; border: 1px solid #ffeeba; }
-        .status-success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
-        .status-error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
-        .result-area {
+        }}
+        .status-pending {{ background-color: #fff3cd; color: #856404; border: 1px solid #ffeeba; }}
+        .status-success {{ background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }}
+        .status-error {{ background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }}
+        .result-area {{
             margin-top: 15px;
             display: none;
-        }
-        .result-link {
+        }}
+        .result-link {{
             word-break: break-all;
             background: #eee;
             padding: 10px;
             border-radius: 4px;
             font-family: monospace;
             margin-bottom: 10px;
-        }
-        .action-btns {
+        }}
+        .action-btns {{
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 10px;
-        }
-        .btn-action {
+        }}
+        .btn-action {{
             padding: 10px;
             border-radius: 6px;
             text-align: center;
             text-decoration: none;
             font-weight: 600;
             font-size: 0.9rem;
-        }
-        .btn-copy { background: #28a745; color: white; border: none; cursor: pointer; }
-        .btn-open { background: #ff0000; color: white; }
+        }}
+        .btn-copy {{ background: #28a745; color: white; border: none; cursor: pointer; }}
+        .btn-open {{ background: #ff0000; color: white; }}
     </style>
 </head>
 <body>
@@ -396,13 +404,12 @@ async def get_ui():
             <span>Mã YouTube Shopee</span>
         </div>
 
-        <a href="https://zalo.me/g/svkgoi169" target="_blank" class="btn-zalo">💬 THAM GIA NHÓM ZALO</a>
-        <a href="https://www.youtube.com/@antigrav" target="_blank" class="btn-yt">🎬 XEM MÃ CỐ ĐỊNH TẠI ĐÂY</a>
+        <a href="{ZALO_LINK}" target="_blank" class="btn-zalo">💬 THAM GIA NHÓM ZALO</a>
 
         <div class="input-group">
             <label>Dán link Shopee vào đây:</label>
-            <input type="text" id="shopee-url" placeholder="https://shopee.vn/...">
-            <button id="convert-btn" onclick="startConversion()">⚡ CHUYỂN ĐỔI LINK</button>
+            <input type="text" id="shopee-url" placeholder="https://vn.shp.ee/...">
+            <button id="convert-btn" onclick="startConversion()">⚡ Gắn Mã</button>
         </div>
 
         <div id="status-box" class="status-box"></div>
@@ -420,93 +427,106 @@ async def get_ui():
         let currentJobId = null;
         let pollInterval = null;
 
-        async function startConversion() {
+        async function startConversion() {{
             const urlInput = document.getElementById('shopee-url');
             const url = urlInput.value.trim();
             if (!url) return alert('Vui lòng nhập link Shopee!');
 
+            // Link Validation
+            const isVideo = url.includes('?smtt=0');
+            const isValidFormat = url.toLowerCase().includes('vn.shp.ee') || url.toLowerCase().includes('s.shopee.vn');
+
+            if (isVideo) {{
+                showStatus('⚠️ Vui lòng nhập link sản phẩm, đây là Link video.', 'error');
+                return;
+            }}
+            if (!isValidFormat) {{
+                showStatus('❌ vui lòng nhập đúng link sản phẩm shopee', 'error');
+                return;
+            }}
+
             const btn = document.getElementById('convert-btn');
             btn.disabled = true;
-            btn.innerText = '⌛ ĐANG GỬI...';
+            btn.innerText = '⌛ ĐANG XỬ LÝ...';
 
             showStatus('⌛ Đã gửi yêu cầu, đang chờ xử lý...', 'pending');
             document.getElementById('result-area').style.display = 'none';
 
-            try {
-                const response = await fetch('/request-conversion', {
+            try {{
+                const response = await fetch('/request-conversion', {{
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ url: url })
-                });
+                    headers: {{ 'Content-Type': 'application/json' }},
+                    body: JSON.stringify({{ url: url }})
+                }});
                 const data = await response.json();
                 currentJobId = data.job_id;
                 
-                // Bắt đầu polling
                 if (pollInterval) clearInterval(pollInterval);
                 pollInterval = setInterval(checkStatus, 2000);
-            } catch (err) {
+            }} catch (err) {{
                 showStatus('❌ Lỗi kết nối Server!', 'error');
                 btn.disabled = false;
-                btn.innerText = '⚡ CHUYỂN ĐỔI LINK';
-            }
-        }
+                btn.innerText = '⚡ Gắn Mã';
+            }}
+        }}
 
-        async function checkStatus() {
+        async function checkStatus() {{
             if (!currentJobId) return;
 
-            try {
-                const response = await fetch(`/check-status?job_id=${currentJobId}`);
+            try {{
+                const response = await fetch(`/check-status?job_id=${{currentJobId}}`);
                 const data = await response.json();
 
-                if (data.status === 'complete') {
+                if (data.status === 'complete') {{
                     clearInterval(pollInterval);
-                    showStatus('✅ CHUYỂN ĐỔI THÀNH CÔNG!', 'success');
+                    showStatus('✅ GẮN MÃ THÀNH CÔNG!', 'success');
                     showResult(data.youtube_link);
                     resetButton();
-                } else if (data.status === 'error') {
+                }} else if (data.status === 'error') {{
                     clearInterval(pollInterval);
                     showStatus('❌ LỖI: ' + data.error, 'error');
                     resetButton();
-                } else {
-                    let msg = '⏳ ' + (data.detailed_status || 'Đang chờ xử lý...');
-                    if (data.queue_position > 0) msg += ` (Hàng đợi: ${data.queue_position})`;
+                }} else {{
+                    // Chỉ hiển thị hàng đợi, ẩn chi tiết
+                    let msg = '⏳ Đang chờ xử lý...';
+                    if (data.queue_position > 0) msg = `⏳ Bạn đang ở vị trí thứ ${{data.queue_position}} trong hàng đợi.`;
                     showStatus(msg, 'pending');
-                }
-            } catch (err) {
+                }}
+            }} catch (err) {{
                 console.error('Polling error:', err);
-            }
-        }
+            }}
+        }}
 
-        function showStatus(msg, type) {
+        function showStatus(msg, type) {{
             const box = document.getElementById('status-box');
             box.style.display = 'block';
             box.innerText = msg;
             box.className = 'status-box status-' + type;
-        }
+        }}
 
-        function showResult(link) {
+        function showResult(link) {{
             const area = document.getElementById('result-area');
             area.style.display = 'block';
             document.getElementById('result-link').innerText = link;
             document.getElementById('open-link').href = link;
-        }
+        }}
 
-        function resetButton() {
+        function resetButton() {{
             const btn = document.getElementById('convert-btn');
             btn.disabled = false;
-            btn.innerText = '⚡ CHUYỂN ĐỔI LINK';
-        }
+            btn.innerText = '⚡ Gắn Mã';
+        }}
 
-        function copyLink() {
+        function copyLink() {{
             const link = document.getElementById('result-link').innerText;
-            navigator.clipboard.writeText(link).then(() => {
+            navigator.clipboard.writeText(link).then(() => {{
                 alert('Đã chép mã thành công!');
-            });
-        }
+            }});
+        }}
     </script>
 </body>
 </html>
-    """
+"""
     return html_content
 
 if __name__ == "__main__":
