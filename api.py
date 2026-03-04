@@ -434,8 +434,8 @@ async def get_ui():
         <div id="result-area" class="result-area">
             <div id="result-link" class="result-link"></div>
             <div class="action-btns">
-                <button class="btn-action btn-copy" onclick="copyLink()">📋 CHÉP MÃ</button>
-                <a id="open-link" href="#" target="_blank" class="btn-action btn-open">🌍 MỞ VIDEO</a>
+                <a id="open-link" href="#" target="_blank" class="btn-action btn-open">🌍 Mở Link Lấy Mã</a>
+                <button class="btn-action btn-copy" onclick="copyLink()">📋 Copy Link</button>
             </div>
         </div>
     </div>
