@@ -24,7 +24,7 @@ emulator_commands: deque = deque()  # Hàng đợi lệnh cho Emulator: ["RELOAD
 
 # --- THAY ĐỔI LINK CỦA BẠN TẠI ĐÂY ---
 ZALO_LINK = "https://zalo.me/g/svkgoi169"
-YOUTUBE_LINK = "https://www.youtube.com/@antigrav"
+YOUTUBE_LINK = "https://youtube.com/shopcollection/SCUCRmBaJUNvFvMmbln7TBzmH7gk5YXlO3wJA?si=4_mkvFsa9v0KPjHt"
 
 # --- Thống kê ---
 global_stats = {
