@@ -17,6 +17,7 @@ app.add_middleware(
 )
 
 # --- Hàng đợi và kết quả theo job_id ---
+JOB_TTL = 180                       # Thời gian chờ tối đa (giây)
 job_queue: deque = deque()          # Hàng đợi chờ xử lý: [{"job_id", "url", "sub_id"}]
 job_results: dict = {}              # Kết quả: {job_id: {"status", "youtube_link", "error"}}
 emulator_commands: deque = deque()  # Hàng đợi lệnh cho Emulator: ["RELOAD", ...]
@@ -60,7 +61,8 @@ async def request_conversion(req: LinkRequest):
         "youtube_link": None, 
         "error": None,
         "shopee_url": req.url,
-        "detailed_status": ""
+        "detailed_status": "",
+        "created_at": time.time()
     }
     return {"job_id": job_id, "status": "pending"}
 
@@ -68,43 +70,45 @@ async def request_conversion(req: LinkRequest):
 @app.get("/get-pending-link")
 async def get_pending_link():
     """Extension polling để lấy job tiếp theo trong queue."""
-    now = time.time()
+    try:
+        now = time.time()
 
-    # Dọn job cũ quá TTL
-    while job_queue and now - job_queue[0]["created_at"] > JOB_TTL:
-        old = job_queue.popleft()
-        if job_results.get(old["job_id"], {}).get("status") in ("pending", "processing"):
-            job_results[old["job_id"]] = {"status": "error", "youtube_link": None, "error": "Hết thời gian chờ"}
+        # Dọn job cũ quá TTL
+        while job_queue and (now - job_queue[0]["created_at"] > JOB_TTL):
+            old = job_queue.popleft()
+            if job_results.get(old["job_id"], {}).get("status") in ("pending", "processing"):
+                job_results[old["job_id"]] = {"status": "error", "youtube_link": None, "error": "Hết thời gian chờ", "created_at": old["created_at"]}
 
-    # --- KIỂM TRA XỬ LÝ TUẦN TỰ ---
-    # Nếu đã có job đang ở trạng thái "processing", không cấp job mới
-    # Điều này đảm bảo Bot chỉ làm xong việc này mới sang việc kia.
-    for job in job_queue:
-        if job_results.get(job["job_id"], {}).get("status") == "processing":
-            # Kiểm tra xem job này có bị stuck không (quá 90s)
-            elapsed = now - job.get("picked_at", now)
-            if elapsed > 90:
-                print(f"⚠️ Job {job['job_id']} bị stuck, reset về pending.")
-                job_results[job["job_id"]]["status"] = "pending"
-                job.pop("picked_at", None)
-            else:
-                # Vẫn đang có job xử lý và chưa quá hạn -> không cấp thêm
-                return {"has_link": False}
+        # --- KIỂM TRA XỬ LÝ TUẦN TỰ ---
+        for job in job_queue:
+            if job_results.get(job["job_id"], {}).get("status") == "processing":
+                # Kiểm tra xem job này có bị stuck không (quá 90s)
+                elapsed = now - job.get("picked_at", now)
+                if elapsed > 90:
+                    print(f"⚠️ Job {job['job_id']} bị stuck, reset về pending.")
+                    if job["job_id"] in job_results:
+                        job_results[job["job_id"]]["status"] = "pending"
+                    job.pop("picked_at", None)
+                else:
+                    return {"has_link": False, "status": "processing"}
 
-    # Tìm job đầu tiên "pending" để cấp cho bot
-    for job in job_queue:
-        job_id = job["job_id"]
-        if job_results.get(job_id, {}).get("status") == "pending":
-            job_results[job_id]["status"] = "processing"
-            job["picked_at"] = now
-            return {
-                "has_link": True,
-                "job_id": job_id,
-                "shopee_url": job["url"],
-                "sub_id": job.get("sub_id", "")
-            }
+        # Tìm job đầu tiên "pending" để cấp cho bot
+        for job in job_queue:
+            job_id = job["job_id"]
+            if job_results.get(job_id, {}).get("status") == "pending":
+                job_results[job_id]["status"] = "processing"
+                job["picked_at"] = now
+                return {
+                    "has_link": True,
+                    "job_id": job_id,
+                    "shopee_url": job["url"],
+                    "sub_id": job.get("sub_id", "")
+                }
 
-    return {"has_link": False}
+        return {"has_link": False}
+    except Exception as e:
+        print(f"🔥 LỖI SERVER TRONG get_pending_link: {str(e)}")
+        return {"has_link": False, "error": str(e)}
 
 
 @app.post("/submit-youtube-link")
@@ -146,7 +150,20 @@ async def check_status(job_id: str):
     """Streamlit kiểm tra tiến độ theo job_id."""
     if job_id not in job_results:
         raise HTTPException(status_code=404, detail="Job not found")
+    
     result = job_results[job_id]
+    now = time.time()
+    created_at = result.get("created_at", now)
+
+    # --- KIỂM TRA TIMEOUT 30 GIÂY ---
+    if result["status"] in ("pending", "processing") and (now - created_at) > 30:
+        result["status"] = "error"
+        result["error"] = "Lỗi gắn mã, vui lòng thử lại"
+        # Xoá khỏi queue nếu còn
+        for i, job in enumerate(job_queue):
+            if job["job_id"] == job_id:
+                del job_queue[i]
+                break
     # Tính vị trí trong hàng đợi
     queue_pos = 0
     if result["status"] == "pending":
@@ -426,6 +443,7 @@ async def get_ui():
     <script>
         let currentJobId = null;
         let pollInterval = null;
+        let startTime = null;
 
         async function startConversion() {{
             const urlInput = document.getElementById('shopee-url');
@@ -460,13 +478,13 @@ async def get_ui():
                 }});
                 const data = await response.json();
                 currentJobId = data.job_id;
+                startTime = Date.now(); // Bắt đầu đếm ngược 30s
                 
                 if (pollInterval) clearInterval(pollInterval);
                 pollInterval = setInterval(checkStatus, 2000);
             }} catch (err) {{
                 showStatus('❌ Lỗi kết nối Server!', 'error');
-                btn.disabled = false;
-                btn.innerText = '⚡ Gắn Mã';
+                resetButton();
             }}
         }}
 
@@ -477,14 +495,18 @@ async def get_ui():
                 const response = await fetch(`/check-status?job_id=${{currentJobId}}`);
                 const data = await response.json();
 
+                // Kiểm tra Timeout ở phía Client (30 giây)
+                const elapsed = (Date.now() - startTime) / 1000;
+                
                 if (data.status === 'complete') {{
                     clearInterval(pollInterval);
                     showStatus('✅ GẮN MÃ THÀNH CÔNG!', 'success');
                     showResult(data.youtube_link);
                     resetButton();
-                }} else if (data.status === 'error') {{
+                }} else if (data.status === 'error' || elapsed > 30) {{
                     clearInterval(pollInterval);
-                    showStatus('❌ LỖI: ' + data.error, 'error');
+                    const errorMsg = elapsed > 30 ? 'Lỗi gắn mã, vui lòng thử lại' : data.error;
+                    showStatus('❌ LỖI: ' + errorMsg, 'error');
                     resetButton();
                 }} else {{
                     // Chỉ hiển thị hàng đợi, ẩn chi tiết
