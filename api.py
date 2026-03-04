@@ -97,7 +97,6 @@ async def get_pending_link():
             job_id = job["job_id"]
             if job_results.get(job_id, {}).get("status") == "pending":
                 job_results[job_id]["status"] = "processing"
-                job_results[job_id]["picked_at"] = now  # Lưu vào results để client check
                 job["picked_at"] = now
                 return {
                     "has_link": True,
@@ -156,21 +155,11 @@ async def check_status(job_id: str):
     now = time.time()
     created_at = result.get("created_at", now)
 
-    # --- KIỂM TRA TIMEOUT LOGIC MỚI ---
-    picked_at = result.get("picked_at")
-    
-    # 1. Nếu đang trong hàng chờ (pending): Timeout sau JOB_TTL (180s)
-    if result["status"] == "pending" and (now - created_at) > JOB_TTL:
+    # --- KIỂM TRA TIMEOUT 30 GIÂY ---
+    if result["status"] in ("pending", "processing") and (now - created_at) > 30:
         result["status"] = "error"
-        result["error"] = "Hàng chờ quá lâu, vui lòng thử lại"
-    
-    # 2. Nếu đang xử lý (processing): Timeout sau 30s kể từ lúc Bot bắt đầu
-    elif result["status"] == "processing" and picked_at and (now - picked_at) > 30:
-        result["status"] = "error"
-        result["error"] = "Bot xử lý quá 30s, vui lòng thử lại"
-        
-    # Xoá khỏi queue nếu bị lỗi
-    if result["status"] == "error":
+        result["error"] = "Lỗi gắn mã, vui lòng thử lại"
+        # Xoá khỏi queue nếu còn
         for i, job in enumerate(job_queue):
             if job["job_id"] == job_id:
                 del job_queue[i]
@@ -435,7 +424,7 @@ async def get_ui():
         <a href="{ZALO_LINK}" target="_blank" class="btn-zalo">💬 THAM GIA NHÓM ZALO</a>
 
         <div class="input-group">
-            <label>Dán link Shopee vào đây:</label>
+            <label>Dán Link sản phẩm cần lấy mã vào đây 👇</label>
             <input type="text" id="shopee-url" placeholder="https://vn.shp.ee/...">
             <button id="convert-btn" onclick="startConversion()">⚡ Gắn Mã</button>
         </div>
@@ -506,22 +495,22 @@ async def get_ui():
                 const response = await fetch(`/check-status?job_id=${{currentJobId}}`);
                 const data = await response.json();
 
-                // Logic Timeout mới: 
-                // - Lỗi nếu Server báo error
-                // - Hoặc nếu đang processing mà quá 35s (trừ hao 5s mạng)
+                // Kiểm tra Timeout ở phía Client (30 giây)
+                const elapsed = (Date.now() - startTime) / 1000;
                 
                 if (data.status === 'complete') {{
                     clearInterval(pollInterval);
                     showStatus('✅ GẮN MÃ THÀNH CÔNG!', 'success');
                     showResult(data.youtube_link);
                     resetButton();
-                }} else if (data.status === 'error') {{
+                }} else if (data.status === 'error' || elapsed > 30) {{
                     clearInterval(pollInterval);
-                    showStatus('❌ LỖI: ' + data.error, 'error');
+                    const errorMsg = elapsed > 30 ? 'Lỗi gắn mã, vui lòng thử lại' : data.error;
+                    showStatus('❌ LỖI: ' + errorMsg, 'error');
                     resetButton();
                 }} else {{
                     // Chỉ hiển thị hàng đợi, ẩn chi tiết
-                    let msg = '⏳ Đang chờ xử lý... từ 10-30s.';
+                    let msg = '⏳ Đang chờ xử lý...';
                     if (data.queue_position > 0) msg = `⏳ Bạn đang ở vị trí thứ ${{data.queue_position}} trong hàng đợi.`;
                     showStatus(msg, 'pending');
                 }}
