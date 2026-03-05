@@ -49,8 +49,11 @@ class YoutubeResponse(BaseModel):
 @app.post("/request-conversion")
 async def request_conversion(req: LinkRequest):
     """Streamlit gọi để yêu cầu convert 1 link. Trả về job_id."""
-    # Kiểm tra xem hệ thống có đang hoạt động không (Bot có online trong 30s qua không)
-    if time.time() - global_stats["last_bot_heartbeat"] > 30:
+    # Kiểm tra xem hệ thống có đang hoạt động không (Bot offline > 60s)
+    heartbeat_age = time.time() - global_stats["last_bot_heartbeat"]
+    is_processing = any(res.get("status") == "processing" for res in job_results.values())
+    
+    if heartbeat_age > 60 and not is_processing:
         return {"job_id": None, "status": "maintenance", "error": "Hệ thống đang bảo trì"}
     
     job_id = str(uuid.uuid4())
@@ -127,6 +130,7 @@ async def get_pending_link():
 @app.post("/submit-youtube-link")
 async def submit_youtube_link(res: YoutubeResponse):
     """Extension trả kết quả về kèm job_id."""
+    global_stats["last_bot_heartbeat"] = time.time()  # Cập nhật heartbeat khi có kết quả trả về
     job_id = res.job_id
     if job_id not in job_results:
         raise HTTPException(status_code=404, detail="Job not found")
@@ -159,7 +163,11 @@ async def submit_youtube_link(res: YoutubeResponse):
 
 @app.get("/maintenance-status")
 async def maintenance_status():
-    is_maintenance = time.time() - global_stats["last_bot_heartbeat"] > 30
+    heartbeat_age = time.time() - global_stats["last_bot_heartbeat"]
+    is_processing = any(res.get("status") == "processing" for res in job_results.values())
+    
+    # Chỉ coi là bảo trì nếu không có bot nào poll trong 60s VÀ cũng không có bot nào đang xử lý dở
+    is_maintenance = heartbeat_age > 60 and not is_processing
     return {"is_maintenance": is_maintenance}
 
 @app.get("/check-status")
@@ -468,9 +476,14 @@ async def get_ui():
     <script>
         let currentJobId = null;
         let pollInterval = null;
-        let processingStartTime = 0; // Thời điểm bắt đầu xử lý
+        let processingStartTime = 0; // Thời điểm bắt đầu xử lý (reset mỗi khi gửi yêu cầu mới)
 
         async function startConversion() {{
+            // Reset state cho yêu cầu mới ngay lập tức
+            if (pollInterval) clearInterval(pollInterval);
+            currentJobId = null;
+            processingStartTime = 0;
+
             const urlInput = document.getElementById('shopee-url');
             const url = urlInput.value.trim();
             if (!url) return alert('Vui lòng nhập link Shopee!');
@@ -510,9 +523,7 @@ async def get_ui():
                 }}
                 
                 currentJobId = data.job_id;
-                startTime = Date.now(); // Bắt đầu đếm ngược 30s
                 
-                if (pollInterval) clearInterval(pollInterval);
                 pollInterval = setInterval(checkStatus, 2000);
             }} catch (err) {{
                 showStatus('❌ Lỗi kết nối Server!', 'error');
