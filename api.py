@@ -31,7 +31,8 @@ global_stats = {
     "total_requests": 0,
     "completed_jobs": 0,
     "errors": 0,
-    "start_time": time.time()
+    "start_time": time.time(),
+    "last_bot_heartbeat": 0  # Theo dõi lần cuối bot (Extension/Phone) kết nối
 }
 
 
@@ -48,6 +49,10 @@ class YoutubeResponse(BaseModel):
 @app.post("/request-conversion")
 async def request_conversion(req: LinkRequest):
     """Streamlit gọi để yêu cầu convert 1 link. Trả về job_id."""
+    # Kiểm tra xem hệ thống có đang hoạt động không (Bot có online trong 30s qua không)
+    if time.time() - global_stats["last_bot_heartbeat"] > 30:
+        return {"job_id": None, "status": "maintenance", "error": "Hệ thống đang bảo trì"}
+    
     job_id = str(uuid.uuid4())
     job_queue.append({
         "job_id": job_id,
@@ -70,8 +75,9 @@ async def request_conversion(req: LinkRequest):
 @app.get("/get-pending-link")
 async def get_pending_link():
     """Extension polling để lấy job tiếp theo trong queue."""
+    now = time.time()
+    global_stats["last_bot_heartbeat"] = now  # Cập nhật heartbeat khi có bot kết nối
     try:
-        now = time.time()
 
         # Dọn job cũ quá TTL
         while job_queue and (now - job_queue[0]["created_at"] > JOB_TTL):
@@ -97,6 +103,7 @@ async def get_pending_link():
             job_id = job["job_id"]
             if job_results.get(job_id, {}).get("status") == "pending":
                 job_results[job_id]["status"] = "processing"
+                job_results[job_id]["picked_at"] = now  # Lưu thời điểm bot bắt đầu xử lý
                 job["picked_at"] = now
                 return {
                     "has_link": True,
@@ -144,6 +151,10 @@ async def submit_youtube_link(res: YoutubeResponse):
 
     return {"message": "Result received"}
 
+@app.get("/maintenance-status")
+async def maintenance_status():
+    is_maintenance = time.time() - global_stats["last_bot_heartbeat"] > 30
+    return {"is_maintenance": is_maintenance}
 
 @app.get("/check-status")
 async def check_status(job_id: str):
@@ -155,15 +166,17 @@ async def check_status(job_id: str):
     now = time.time()
     created_at = result.get("created_at", now)
 
-    # --- KIỂM TRA TIMEOUT 30 GIÂY ---
-    if result["status"] in ("pending", "processing") and (now - created_at) > 30:
-        result["status"] = "error"
-        result["error"] = "Lỗi gắn mã, vui lòng thử lại"
-        # Xoá khỏi queue nếu còn
-        for i, job in enumerate(job_queue):
-            if job["job_id"] == job_id:
-                del job_queue[i]
-                break
+    # --- KIỂM TRA TIMEOUT 40 GIÂY (Chỉ tính khi đang xử lý, không tính hàng chờ) ---
+    if result["status"] == "processing":
+        picked_at = result.get("picked_at")
+        if picked_at and (now - picked_at) > 40:
+            result["status"] = "error"
+            result["error"] = "Lỗi gắn mã, vui lòng thử lại"
+            # Xoá khỏi queue nếu còn
+            for i, job in enumerate(job_queue):
+                if job["job_id"] == job_id:
+                    del job_queue[i]
+                    break
     # Tính vị trí trong hàng đợi
     queue_pos = 0
     if result["status"] == "pending":
@@ -272,6 +285,12 @@ async def reset_all():
 # --- Trang Giao diện Siêu nhẹ (Zalo Compatible) ---
 @app.get("/", response_class=HTMLResponse)
 async def get_ui():
+    # Kiểm tra trạng thái hệ thống ngay khi load trang
+    is_maintenance = time.time() - global_stats["last_bot_heartbeat"] > 30
+    status_msg = "⚠️ Đang Bảo Trì Hệ Thống. Vui lòng quay lại sau!" if is_maintenance else ""
+    status_type = "error"
+    display_style = "block" if is_maintenance else "none"
+
     html_content = f"""
 <!DOCTYPE html>
 <html lang="vi">
@@ -377,7 +396,7 @@ async def get_ui():
             padding: 15px;
             border-radius: 8px;
             margin-top: 20px;
-            display: none;
+            display: {display_style};
         }}
         .status-pending {{ background-color: #fff3cd; color: #856404; border: 1px solid #ffeeba; }}
         .status-success {{ background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }}
@@ -425,11 +444,11 @@ async def get_ui():
 
         <div class="input-group">
             <label>Dán Link sản phẩm cần lấy mã vào đây 👇</label>
-            <input type="text" id="shopee-url" placeholder="https://vn.shp.ee/...">
-            <button id="convert-btn" onclick="startConversion()">⚡ Gắn Mã</button>
+            <input type="text" id="shopee-url" placeholder="https://vn.shp.ee/..." {"disabled" if is_maintenance else ""}>
+            <button id="convert-btn" onclick="startConversion()" {"disabled" if is_maintenance else ""}>⚡ Gắn Mã</button>
         </div>
 
-        <div id="status-box" class="status-box"></div>
+        <div id="status-box" class="status-box status-{status_type}">{status_msg}</div>
 
         <div id="result-area" class="result-area">
             <div id="result-link" class="result-link"></div>
@@ -443,7 +462,7 @@ async def get_ui():
     <script>
         let currentJobId = null;
         let pollInterval = null;
-        let startTime = null;
+        let processingStartTime = 0; // Thời điểm bắt đầu xử lý
 
         async function startConversion() {{
             const urlInput = document.getElementById('shopee-url');
@@ -467,7 +486,7 @@ async def get_ui():
             btn.disabled = true;
             btn.innerText = '⌛ ĐANG XỬ LÝ...';
 
-            showStatus('⌛ Đã gửi yêu cầu, đang chờ xử lý...', 'pending');
+            showStatus('⌛ Đã gửi yêu cầu, Đang chờ xử lý... từ 10-20s', 'pending');
             document.getElementById('result-area').style.display = 'none';
 
             try {{
@@ -477,6 +496,13 @@ async def get_ui():
                     body: JSON.stringify({{ url: url }})
                 }});
                 const data = await response.json();
+                
+                if (data.status === 'maintenance') {{
+                    showStatus('⚠️ Đang Bảo Trì Hệ Thống. Vui lòng quay lại sau!', 'error');
+                    resetButton();
+                    return;
+                }}
+                
                 currentJobId = data.job_id;
                 startTime = Date.now(); // Bắt đầu đếm ngược 30s
                 
@@ -495,22 +521,23 @@ async def get_ui():
                 const response = await fetch(`/check-status?job_id=${{currentJobId}}`);
                 const data = await response.json();
 
-                // Kiểm tra Timeout ở phía Client (30 giây)
-                const elapsed = (Date.now() - startTime) / 1000;
-                
+                if (data.status === 'processing' && processingStartTime === 0) {{
+                    processingStartTime = Date.now(); // Bắt đầu tính timeout 40s khi bot nhận link
+                }}
+
                 if (data.status === 'complete') {{
                     clearInterval(pollInterval);
                     showStatus('✅ GẮN MÃ THÀNH CÔNG!', 'success');
                     showResult(data.youtube_link);
                     resetButton();
-                }} else if (data.status === 'error' || elapsed > 30) {{
+                }} else if (data.status === 'error' || (processingStartTime > 0 && (Date.now() - processingStartTime) > 40000)) {{
                     clearInterval(pollInterval);
-                    const errorMsg = elapsed > 30 ? 'Lỗi gắn mã, vui lòng thử lại' : data.error;
+                    const errorMsg = (processingStartTime > 0 && (Date.now() - processingStartTime) > 40000) ? 'Lỗi gắn mã, vui lòng thử lại' : data.error;
                     showStatus('❌ LỖI: ' + errorMsg, 'error');
                     resetButton();
                 }} else {{
                     // Chỉ hiển thị hàng đợi, ẩn chi tiết
-                    let msg = '⏳ Đang chờ xử lý...';
+                    let msg = '⏳ Đang chờ xử lý... từ 10-20s';
                     if (data.queue_position > 0) msg = `⏳ Bạn đang ở vị trí thứ ${{data.queue_position}} trong hàng đợi.`;
                     showStatus(msg, 'pending');
                 }}
@@ -545,6 +572,30 @@ async def get_ui():
                 alert('Đã chép mã thành công!');
             }});
         }}
+
+        // Kiểm tra bảo trì tự động mỗi 10 giây
+        setInterval(async () => {{
+            try {{
+                const response = await fetch('/maintenance-status');
+                const data = await response.json();
+                const btn = document.getElementById('convert-btn');
+                const input = document.getElementById('shopee-url');
+                
+                if (data.is_maintenance) {{
+                    showStatus('⚠️ Đang Bảo Trì Hệ Thống. Vui lòng quay lại sau!', 'error');
+                    btn.disabled = true;
+                    input.disabled = true;
+                }} else if (!currentJobId) {{
+                    // Chỉ ẩn nếu không có job nào đang poll
+                    const box = document.getElementById('status-box');
+                    if (box.innerText.includes('Bảo Trì')) {{
+                         box.style.display = 'none';
+                         btn.disabled = false;
+                         input.disabled = false;
+                    }}
+                }}
+            }} catch (err) {{}}
+        }}, 10000);
     </script>
 </body>
 </html>
