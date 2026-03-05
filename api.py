@@ -71,7 +71,7 @@ async def get_pending_link():
         if job_results.get(job_id, {}).get("status") == "pending":
             job_results[job_id]["status"] = "processing"
             return job
-    return None
+    return {}  # Trả về dict rỗng thay vì None để bot cũ không bị lỗi NoneType
 
 @app.post("/submit-youtube-link")
 async def submit_youtube_link(res: YoutubeResponse):
@@ -362,6 +362,6 @@ async def get_ui():
 
 if __name__ == "__main__":
     import uvicorn
-    # Chạy trên 0.0.0.0 để có thể nhận kết nối từ internet (Render)
-    print("🚀 API Server đang khởi động...")
+    # Production: chạy trên 0.0.0.0 để Render expose ra internet
+    print("🚀 API Server đang chạy ở chế độ PRODUCTION (Render).")
     uvicorn.run(app, host="0.0.0.0", port=8002)
