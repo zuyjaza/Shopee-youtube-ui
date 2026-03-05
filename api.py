@@ -421,7 +421,7 @@ async def get_ui():
             <span>Mã YouTube Shopee</span>
         </div>
 
-        <a href="{ZALO_LINK}" target="_blank" class="btn-zalo">💬 THAM GIA NHÓM ZALO</a>
+        <a href="{ZALO_LINK}" target="_blank" class="btn-zalo">💬 THAM GIA NHÓM ZALO HỖ TRỢ</a>
 
         <div class="input-group">
             <label>Dán Link sản phẩm cần lấy mã vào đây 👇</label>
