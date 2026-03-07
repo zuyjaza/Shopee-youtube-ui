@@ -99,7 +99,7 @@ async def get_pending_link():
                     if job_id in job_results:
                         job_results[job_id].update({
                             "status": "error",
-                            "error": "Tìm sản phẩm này trên shop khác và thử lại. (Hệ thống tự động hủy do quá 40s)"
+                            "error": "Vui lòng gắn mã lại (Hệ thống tự động hủy do quá 40s)"
                         })
                     # Xoá khỏi queue để link tiếp theo có thể chạy
                     del job_queue[i]
@@ -144,6 +144,11 @@ async def submit_youtube_link(res: YoutubeResponse):
     yt_link = res.yt_link
     if yt_link.startswith("ERROR:"):
         error_msg = yt_link.replace("ERROR:", "").strip()
+        
+        # --- TỰ ĐỘNG SỬA THÔNG BÁO LỖI THEO YÊU CẦU ---
+        if "vui lòng đổi shop khác" in error_msg.lower():
+            error_msg = "Tìm sản phẩm này trên shop khác và thử lại."
+            
         job_results[job_id].update({
             "status": "error", 
             "youtube_link": None, 
@@ -185,7 +190,7 @@ async def check_status(job_id: str):
         picked_at = result.get("picked_at")
         if picked_at and (now - picked_at) > 40:
             result["status"] = "error"
-            result["error"] = "Tìm sản phẩm này trên shop khác và thử lại."
+            result["error"] = "Vui lòng gắn mã lại"
             # Xoá khỏi queue nếu còn
             for i, job in enumerate(job_queue):
                 if job["job_id"] == job_id:
@@ -549,7 +554,7 @@ async def get_ui():
                     resetButton();
                 }} else if (data.status === 'error' || (processingStartTime > 0 && (Date.now() - processingStartTime) > 40000)) {{
                     clearInterval(pollInterval);
-                    const errorMsg = (processingStartTime > 0 && (Date.now() - processingStartTime) > 40000) ? 'Tìm sản phẩm này trên shop khác và thử lại.' : data.error;
+                    const errorMsg = (processingStartTime > 0 && (Date.now() - processingStartTime) > 40000) ? 'Vui lòng gắn mã lại' : data.error;
                     showStatus('❌ LỖI: ' + errorMsg, 'error');
                     resetButton();
                 }} else {{
