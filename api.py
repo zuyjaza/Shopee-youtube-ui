@@ -147,7 +147,7 @@ async def submit_youtube_link(res: YoutubeResponse):
         
         # --- TỰ ĐỘNG SỬA THÔNG BÁO LỖI THEO YÊU CẦU ---
         if "vui lòng đổi shop khác" in error_msg.lower():
-            error_msg = "Tìm sản phẩm này trên shop khác và thử lại."
+            error_msg = "Shop bạn gửi không hỗ trợ mã, tìm sản phẩm này trên shop khác và thử lại."
             
         job_results[job_id].update({
             "status": "error", 
@@ -447,6 +447,18 @@ async def get_ui():
         }}
         .btn-copy {{ background: #28a745; color: white; border: none; cursor: pointer; }}
         .btn-open {{ background: #ff0000; color: white; }}
+        
+        /* Hiệu ứng dấu chấm nháy */
+        .dots span {{
+            animation: blink 1.4s infinite both;
+        }}
+        .dots span:nth-child(2) {{ animation-delay: 0.2s; }}
+        .dots span:nth-child(3) {{ animation-delay: 0.4s; }}
+        @keyframes blink {{
+            0% {{ opacity: .2; }}
+            20% {{ opacity: 1; }}
+            100% {{ opacity: .2; }}
+        }}
     </style>
 </head>
 <body>
@@ -482,6 +494,7 @@ async def get_ui():
         let currentJobId = null;
         let pollInterval = null;
         let processingStartTime = 0; // Thời điểm bắt đầu xử lý (reset mỗi khi gửi yêu cầu mới)
+        const dotHtml = '<span class="dots"><span>.</span><span>.</span><span>.</span></span>';
 
         async function startConversion() {{
             // Reset state cho yêu cầu mới ngay lập tức
@@ -508,9 +521,9 @@ async def get_ui():
 
             const btn = document.getElementById('convert-btn');
             btn.disabled = true;
-            btn.innerText = '⌛ ĐANG XỬ LÝ...';
+            btn.innerHTML = '⌛ ĐANG XỬ LÝ' + dotHtml;
 
-            showStatus('⌛ Đã gửi yêu cầu, Đang chờ xử lý... từ 10-20s', 'pending');
+            showStatus('⌛ Đã gửi yêu cầu, Đang chờ xử lý' + dotHtml + ' từ 10-20s', 'pending');
             document.getElementById('result-area').style.display = 'none';
 
             try {{
@@ -559,8 +572,8 @@ async def get_ui():
                     resetButton();
                 }} else {{
                     // Chỉ hiển thị hàng đợi, ẩn chi tiết
-                    let msg = '⏳ Đang chờ xử lý... từ 10-20s';
-                    if (data.queue_position > 0) msg = `⏳ Bạn đang ở vị trí thứ ${{data.queue_position}} trong hàng đợi.`;
+                    let msg = '⏳ Đang chờ xử lý' + dotHtml + ' từ 10-20s';
+                    if (data.queue_position > 0) msg = `⏳ Bạn đang ở vị trí thứ ${{data.queue_position}} trong hàng đợi` + dotHtml;
                     showStatus(msg, 'pending');
                 }}
             }} catch (err) {{
@@ -571,7 +584,7 @@ async def get_ui():
         function showStatus(msg, type) {{
             const box = document.getElementById('status-box');
             box.style.display = 'block';
-            box.innerText = msg;
+            box.innerHTML = msg;
             box.className = 'status-box status-' + type;
         }}
 
